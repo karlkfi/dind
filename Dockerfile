@@ -2,12 +2,15 @@ FROM ubuntu:14.04
 MAINTAINER jerome.petazzoni@docker.com
 
 # Let's start with some basic stuff.
-RUN apt-get update -qq && apt-get install -qqy \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    lxc \
-    iptables
+RUN apt-get update -qq && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -qqy --no-install-recommends \
+        apt-transport-https \
+        ca-certificates \
+        curl \
+        lxc \
+        iptables \
+        && \
+    apt-get clean
     
 # Install Docker from Docker Inc. repositories.
 RUN curl -sSL https://get.docker.com/ubuntu/ | sh
