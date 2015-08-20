@@ -18,4 +18,4 @@ RUN DOCKER_VERSION=latest && \
 
 # Docker volume and run command
 VOLUME /var/lib/docker
-CMD ["wrapdocker"]
+ENTRYPOINT ["wrapdocker"]
