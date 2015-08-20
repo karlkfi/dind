@@ -95,6 +95,9 @@ else
     docker -d ${DOCKER_DAEMON_ARGS} &
   fi
 
+  # Cleany shutdown docker daemon on exit to avoid resource leaks
+  trap 'service docker stop' EXIT
+
   (( timeout = 60 + SECONDS ))
   until docker info >/dev/null 2>&1; do
     if (( SECONDS >= timeout )); then
