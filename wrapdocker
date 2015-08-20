@@ -78,6 +78,36 @@ for FD in *; do
 done
 popd >/dev/null
 
+# find supported filesystem to use for docker image mounts
+if grep -q overlay /proc/filesystems; then
+  STORAGE_FS=overlay
+elif grep -q aufs /proc/filesystems; then
+  STORAGE_FS=aufs
+else
+  echo "No supported filesystem found (aufs, overlay)"
+  exit 1
+fi
+
+# find filesystem below /var/lib/docker
+STORAGE_DIR="/var/lib/docker"
+mkdir -p "${STORAGE_DIR}"
+STORAGE_DIR_FS=$(df -PTh "${STORAGE_DIR}" | awk '{print $2}' | tail -1)
+
+# Unless using overlay over overlay, create an ext3 loop device as an intermediary layer.
+# The max size of the loop device is $VAR_LIB_DOCKER_SIZE in GB (default=5).
+if [ "${STORAGE_DIR_FS}" != "overlay" ] || [ "${STORAGE_FS}" != "overlay" ]; then
+  STORAGE_FILE="/data/docker"
+  VAR_LIB_DOCKER_SIZE=${VAR_LIB_DOCKER_SIZE:-5}
+  mkdir -p "$(dirname "${STORAGE_FILE}")"
+  if [ ! -f "${STORAGE_FILE}" ]; then
+    dd if=/dev/zero of="${STORAGE_FILE}" bs=1G seek=${VAR_LIB_DOCKER_SIZE} count=0
+    echo y | mkfs.ext3 "${STORAGE_FILE}"
+  fi
+  mount -o loop "${STORAGE_FILE}" "${STORAGE_DIR}"
+fi
+
+# Set storage driver
+DOCKER_DAEMON_ARGS="${DOCKER_DAEMON_ARGS} --storage-driver=${STORAGE_FS}"
 
 # If a pidfile is still around (for example after a container restart),
 # delete it so that docker can start.

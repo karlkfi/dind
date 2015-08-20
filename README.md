@@ -77,24 +77,56 @@ $ cat /proc/mounts | grep cgroup
 
 ## How It Works
 
-The main trick is to have the `--privileged` flag. Then, there are a few things
-to care about:
+Using Docker-in-Docker has two main caveats: privileged mode, and filesystem.
 
-- cgroups pseudo-filesystems have to be mounted, and they have to be mounted
-  with the same hierarchies than the parent environment; this is done by a
-  wrapper script, which is setup to run by default;
-- `/var/lib/docker` cannot be on AUFS, so we make it a volume.
+### Privileged Mode
 
-That's it.
+Docker needs to be able to use kernel features, like cgroups and namespaces.
+The `--privileged` flag allows this.
 
+Don't worry, containers created by the inner docker wont have privileged access,
+unless you specify `--privileged` when creating them.
 
-## Important Warning About Disk Usage
+### Docker Image Filesystems
 
-Since AUFS cannot use an AUFS mount as a branch, it means that we have to
-use a volume. Therefore, all inner Docker data (images, containers, etc.)
-will be in the volume. Remember: volumes are not cleaned up when you
-`docker rm`, so if you wonder where did your disk space go after nesting
-10 Dockers within each other, look no further :-)
+By default, Docker stores container images in `/var/lib/docker` and mounts
+their pseudo-filesystems from there.
+
+Previous versions of Docker-in-Docker used a volume for `/var/lib/docker`,
+but this has several limitations:
+- Docker volumes are not garbage collected, causing space leakage.
+- Volumes cannot be mounted on Volumes, making more than one layer of Docker
+  nesting difficult.
+
+To avoid those limitations, we use one of the following approaches.
+
+#### OverlayFS
+
+OverlayFS is the preferred filesystem to use with Docker for multiple reasons,
+but in our case it enabled recursive mounting. This allows Docker to create the
+`/var/lib/docker` mount inside a mounted filesystem.
+
+To use OverlayFS, there are two requirements:
+1. Make sure your kernel supports OverlayFS (kernel version &amp;= 3.18)
+2. [Configure the host Docker daemon](https://docs.docker.com/articles/configuring/) to use OverlayFS (`--storage-driver=overlay`).
+
+#### AUFS
+
+Older kernels do not support OverlayFS. So when OverlayFS is not available,
+or the host Docker is not configured to use it, we fallback to AUFS.
+
+Unfortunately AUFS filesystems do not support AUFS mounts.
+
+To work around this, we create a dynamically sized ext3 loopback device and
+mount it to `/var/lib/docker`. This way the inner Docker can mount its images
+as AUFS filesystems on top of it.
+
+While this approach makes the filesystem transparent to the user,
+it also requires space to be pre-allocated such that the loop device has a fixed
+maximum size. By default, the max size it configured to be 5GB.
+
+The max loop device size can be changed by specifying a number of GB with
+`VAR_LIB_DOCKER_SIZE`.
 
 
 ## Which Version Of Docker Does It Run?

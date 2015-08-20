@@ -17,5 +17,4 @@ RUN DOCKER_VERSION=latest && \
   rm -rf /var/cache/apk/*
 
 # Docker volume and run command
-VOLUME /var/lib/docker
 ENTRYPOINT ["wrapdocker"]
