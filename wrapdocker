@@ -87,11 +87,13 @@ else
   echo "No supported filesystem found (aufs, overlay)"
   exit 1
 fi
+echo "Storage Filesystem: ${STORAGE_FS}"
 
 # find filesystem below /var/lib/docker
 STORAGE_DIR="/var/lib/docker"
 mkdir -p "${STORAGE_DIR}"
 STORAGE_DIR_FS=$(df -PTh "${STORAGE_DIR}" | awk '{print $2}' | tail -1)
+echo "Host Storage Filesystem: ${STORAGE_DIR_FS}"
 
 # Unless using overlay over overlay, create an ext3 loop device as an intermediary layer.
 # The max size of the loop device is $VAR_LIB_DOCKER_SIZE in GB (default=5).
@@ -100,9 +102,11 @@ if [ "${STORAGE_DIR_FS}" != "overlay" ] || [ "${STORAGE_FS}" != "overlay" ]; the
   VAR_LIB_DOCKER_SIZE=${VAR_LIB_DOCKER_SIZE:-5}
   mkdir -p "$(dirname "${STORAGE_FILE}")"
   if [ ! -f "${STORAGE_FILE}" ]; then
+    echo "Creating ext3 filesystem: ${STORAGE_FILE}"
     dd if=/dev/zero of="${STORAGE_FILE}" bs=1G seek=${VAR_LIB_DOCKER_SIZE} count=0
     echo y | mkfs.ext3 "${STORAGE_FILE}"
   fi
+  echo "Mounting loop device: ${STORAGE_DIR}"
   mount -o loop "${STORAGE_FILE}" "${STORAGE_DIR}"
 fi
 
@@ -117,7 +121,7 @@ rm -rf /var/run/docker.pid
 # otherwise, spawn a shell as well
 if [ ! -z "${PORT}" ]; then
   exec docker daemon ${DOCKER_DAEMON_ARGS} \
-    -H 0.0.0.0:${PORT} -H unix:///var/run/docker.sock \
+    -H 0.0.0.0:${PORT} -H unix:///var/run/docker.sock
 else
   if [ "${LOG}" == "file" ]; then
     docker daemon ${DOCKER_DAEMON_ARGS} &>/var/log/docker.log &
